@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FieldDefinition } from "../../types/crd";
 
 interface FieldPanelProps {
   fields: FieldDefinition[];
   optionalFields: FieldDefinition[];
   requiredFieldPaths: string[];
+  onVisiblePathsChange: (paths: string[]) => void;
   onUpdateField: (index: number, value: string) => void;
   onAddField: (path: string) => void;
 }
@@ -19,6 +20,7 @@ interface GroupedField {
 interface FieldGroup {
   key: string;
   title: string;
+  isCollapsible: boolean;
   fields: GroupedField[];
 }
 
@@ -57,10 +59,27 @@ function deriveRelativePath(fieldPath: string, groupKey: string): string {
   return fieldPath;
 }
 
+function isGroupCollapsible(groupKey: string, requiredSet: Set<string>): boolean {
+  const candidates = new Set<string>([groupKey]);
+  if (groupKey.startsWith("spec.")) {
+    candidates.add(groupKey.slice("spec.".length));
+  } else {
+    candidates.add(`spec.${groupKey}`);
+  }
+
+  for (const candidate of candidates) {
+    if (requiredSet.has(candidate)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function FieldPanel({
   fields,
   optionalFields,
   requiredFieldPaths,
+  onVisiblePathsChange,
   onUpdateField,
   onAddField
 }: FieldPanelProps) {
@@ -90,6 +109,7 @@ export function FieldPanel({
         groups.set(groupKey, {
           key: groupKey,
           title: deriveGroupTitle(groupKey),
+          isCollapsible: isGroupCollapsible(groupKey, requiredSet),
           fields: [item]
         });
         return;
@@ -98,6 +118,16 @@ export function FieldPanel({
     });
     return [...groups.values()];
   }, [fields, requiredSet]);
+
+  useEffect(() => {
+    const visiblePaths = groupedFields.flatMap((group) => {
+      if (!group.isCollapsible || !collapsedGroups[group.key]) {
+        return group.fields.map((item) => item.field.path);
+      }
+      return [];
+    });
+    onVisiblePathsChange(visiblePaths);
+  }, [collapsedGroups, groupedFields, onVisiblePathsChange]);
 
   return (
     <article className="panel form-panel">
@@ -116,7 +146,7 @@ export function FieldPanel({
               <button
                 type="button"
                 className={`group-toggle ${collapsedGroups[group.key] ? "collapsed" : "expanded"}`}
-                disabled={group.fields.every((item) => item.isRequired)}
+                disabled={!group.isCollapsible}
                 onClick={() =>
                   setCollapsedGroups((state) => ({
                     ...state,
@@ -133,8 +163,8 @@ export function FieldPanel({
             </div>
 
             <div className="field-group-list">
-              {(collapsedGroups[group.key]
-                ? group.fields.filter((item) => item.isRequired)
+              {(collapsedGroups[group.key] && group.isCollapsible
+                ? []
                 : group.fields
               ).map(({ field, index, relativePath, isRequired }) => {
                 const isOpen = openDescriptions[index] ?? false;

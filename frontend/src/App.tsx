@@ -72,6 +72,7 @@ export default function App() {
   const [templates, setTemplates] = useState<TemplateDefinition[]>([]);
   const [activeTemplateId, setActiveTemplateId] = useState("");
   const [fields, setFields] = useState<FieldDefinition[]>([]);
+  const [visibleFieldPaths, setVisibleFieldPaths] = useState<string[] | null>(null);
   const [manifestHistory, setManifestHistory] = useState<ManifestHistoryItem[]>([]);
 
   const [appStage, setAppStage] = useState<AppStage>("landing");
@@ -100,12 +101,20 @@ export default function App() {
     return selected ?? templates[0];
   }, [activeTemplateId, templates]);
 
+  const effectiveFields = useMemo(() => {
+    if (!visibleFieldPaths) {
+      return fields;
+    }
+    const visible = new Set(visibleFieldPaths);
+    return fields.filter((field) => visible.has(field.path));
+  }, [fields, visibleFieldPaths]);
+
   const computedYaml = useMemo(() => {
     if (!activeTemplate) {
       return "";
     }
-    return generateYaml(activeTemplate.apiVersion, activeTemplate.kind, fields);
-  }, [activeTemplate, fields]);
+    return generateYaml(activeTemplate.apiVersion, activeTemplate.kind, effectiveFields);
+  }, [activeTemplate, effectiveFields]);
 
   const yamlHtml = useMemo(() => highlightYaml(yamlOutput), [yamlOutput]);
 
@@ -474,6 +483,20 @@ export default function App() {
     }
   }
 
+  async function copyApplyCommand(): Promise<void> {
+    const namespaceField = effectiveFields.find((field) => field.path === "metadata.namespace");
+    const namespace = namespaceField?.value?.trim() ?? "";
+    const namespaceFlag = namespace ? ` -n ${namespace}` : "";
+    const command = `kubectl apply${namespaceFlag} -f - <<'EOF'\n${yamlOutput.trimEnd()}\nEOF`;
+
+    try {
+      await navigator.clipboard.writeText(command);
+      setStatus({ tone: "ok", text: "kubectl apply command copied to clipboard." });
+    } catch {
+      setStatus({ tone: "warn", text: "Clipboard is not available in this browser context." });
+    }
+  }
+
   function resetFields(): void {
     if (!activeTemplate) {
       return;
@@ -492,7 +515,7 @@ export default function App() {
       const response = await generateYamlViaApi({
         apiVersion: activeTemplate.apiVersion,
         kind: activeTemplate.kind,
-        fields
+        fields: effectiveFields
       });
       setYamlOutput(response.yaml);
       await persistManifest(`Generated ${activeTemplate.kind}`, response.yaml);
@@ -855,6 +878,8 @@ export default function App() {
               <FieldPanel
                 fields={fields}
                 optionalFields={activeTemplate?.optionalFields ?? []}
+                requiredFieldPaths={activeTemplate?.defaultFields.map((field) => field.path) ?? []}
+                onVisiblePathsChange={setVisibleFieldPaths}
                 onUpdateField={updateField}
                 onAddField={addField}
               />
@@ -862,6 +887,7 @@ export default function App() {
               <YamlPanel
                 html={yamlHtml}
                 onCopy={() => void copyYaml()}
+                onCopyApply={() => void copyApplyCommand()}
                 onReset={resetFields}
                 onSyncApi={() => void syncYamlWithApi()}
                 syncing={isSyncingApi}

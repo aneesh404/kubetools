@@ -616,6 +616,12 @@ button,
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
+.yaml-panel {
+  position: sticky;
+  top: 90px;
+  align-self: start;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -680,6 +686,11 @@ button,
   border-radius: 999px;
 }
 
+.group-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .group-toggle-track {
   width: 40px;
   height: 22px;
@@ -738,6 +749,22 @@ button,
 .field-label {
   font-size: 0.86rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.field-required-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #cbe0ff;
+  background: #eef5ff;
+  color: #2d5cbb;
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
 }
 
 .info-trigger {
@@ -823,6 +850,7 @@ input:focus {
 .yaml-preview {
   margin: 0;
   min-height: 560px;
+  max-height: calc(100vh - 220px);
   border-radius: 15px;
   border: 1px solid #c8d6fb;
   background: var(--k8s-night);
@@ -1010,8 +1038,14 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .yaml-panel {
+    position: static;
+    top: auto;
+  }
+
   .yaml-preview {
     min-height: 420px;
+    max-height: none;
   }
 }
 
