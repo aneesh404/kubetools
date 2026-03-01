@@ -12,6 +12,7 @@ type Config struct {
 	MongoURI          string
 	MongoDatabase     string
 	MongoManifestColl string
+	MongoTemplateColl string
 }
 
 func Load() Config {
@@ -21,6 +22,7 @@ func Load() Config {
 	mongoURI := getenv("MONGODB_URI", "mongodb://localhost:27017")
 	mongoDatabase := getenv("MONGODB_DATABASE", "kubebuilder")
 	mongoManifestColl := getenv("MONGODB_MANIFEST_COLLECTION", "manifests")
+	mongoTemplateColl := getenv("MONGODB_TEMPLATE_COLLECTION", "templates")
 	origins := strings.Split(originsRaw, ",")
 	for i := range origins {
 		origins[i] = strings.TrimSpace(origins[i])
@@ -33,6 +35,7 @@ func Load() Config {
 		MongoURI:          mongoURI,
 		MongoDatabase:     mongoDatabase,
 		MongoManifestColl: mongoManifestColl,
+		MongoTemplateColl: mongoTemplateColl,
 	}
 }
 

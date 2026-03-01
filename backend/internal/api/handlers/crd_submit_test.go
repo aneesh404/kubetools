@@ -2,19 +2,26 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/aneeshchawla/kubetools/backend/internal/config"
 	"github.com/aneeshchawla/kubetools/backend/internal/models"
 	"github.com/aneeshchawla/kubetools/backend/internal/services"
 )
 
 func TestSubmitCRDStoresGeneratedCustomResource(t *testing.T) {
+	templateService, err := services.NewTemplateService(context.Background(), config.Config{})
+	if err != nil {
+		t.Logf("template service fallback: %v", err)
+	}
+
 	handler := NewCRDHandler(
-		services.NewTemplateService(),
+		templateService,
 		services.NewCRDService(),
 		services.NewYAMLService(),
 		&services.ManifestService{},

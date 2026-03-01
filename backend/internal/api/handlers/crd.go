@@ -36,7 +36,12 @@ func (h *CRDHandler) Templates(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "only GET is supported")
 		return
 	}
-	WriteSuccess(w, http.StatusOK, h.templates.List())
+	templates, err := h.templates.List(r.Context())
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "TEMPLATE_LIST_FAILED", err.Error())
+		return
+	}
+	WriteSuccess(w, http.StatusOK, templates)
 }
 
 func (h *CRDHandler) ParseCRD(w http.ResponseWriter, r *http.Request) {
@@ -148,12 +153,25 @@ func (h *CRDHandler) SubmitCRD(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "INVALID_CRD", err.Error())
 		return
 	}
+	if err := h.templates.Upsert(r.Context(), template); err != nil {
+		WriteError(w, http.StatusInternalServerError, "TEMPLATE_PERSIST_FAILED", err.Error())
+		return
+	}
 
 	generatedYAML, err := h.yaml.GenerateYAML(template.APIVersion, template.Kind, template.DefaultFields)
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "GENERATION_FAILED", err.Error())
 		return
 	}
+
+	// Persist CRD schema as companion history item so full template recovery remains possible.
+	_, _ = h.manifests.SaveManifest(r.Context(), models.SaveManifestRequest{
+		Title:      "Schema: " + template.Kind,
+		Resource:   "CRD Schema (" + template.APIVersion + ")",
+		APIVersion: "apiextensions.k8s.io/v1",
+		Kind:       "CustomResourceDefinition",
+		YAML:       payload.Raw,
+	})
 
 	record, err := h.manifests.SaveManifest(r.Context(), models.SaveManifestRequest{
 		Title:      fallbackTitle(payload.Title, template.Kind),

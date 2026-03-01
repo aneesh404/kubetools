@@ -17,7 +17,13 @@ import (
 func main() {
 	cfg := config.Load()
 
-	templateService := services.NewTemplateService()
+	templateService, err := services.NewTemplateService(context.Background(), cfg)
+	if err != nil {
+		log.Printf("initialize template service: %v (falling back to in-memory templates)", err)
+	}
+	if templateService == nil {
+		log.Fatalf("initialize template service: no service available")
+	}
 	crdService := services.NewCRDService()
 	yamlService := services.NewYAMLService()
 	manifestService, err := services.NewManifestService(context.Background(), cfg)
@@ -51,10 +57,10 @@ func main() {
 		}
 	}()
 
-	waitForShutdown(server, manifestService)
+	waitForShutdown(server, templateService, manifestService)
 }
 
-func waitForShutdown(server *http.Server, manifestService *services.ManifestService) {
+func waitForShutdown(server *http.Server, templateService *services.TemplateService, manifestService *services.ManifestService) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
@@ -66,8 +72,11 @@ func waitForShutdown(server *http.Server, manifestService *services.ManifestServ
 		log.Printf("graceful shutdown error: %v", err)
 		return
 	}
+	if err := templateService.Close(ctx); err != nil {
+		log.Printf("template mongodb disconnect error: %v", err)
+	}
 	if err := manifestService.Close(ctx); err != nil {
-		log.Printf("mongodb disconnect error: %v", err)
+		log.Printf("manifest mongodb disconnect error: %v", err)
 	}
 	log.Print("server shutdown complete")
 }

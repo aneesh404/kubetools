@@ -2,7 +2,6 @@ import { Clock3, ChevronRight, Link2, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FieldPanel } from "./components/features/FieldPanel";
 import { YamlPanel } from "./components/features/YamlPanel";
-import { defaultTemplates } from "./lib/templates";
 import { generateYaml, highlightYaml } from "./lib/yaml";
 import {
   generateYamlViaApi,
@@ -35,6 +34,13 @@ interface StatusState {
   text: string;
 }
 
+function isSchemaManifest(item: ManifestHistoryItem): boolean {
+  return (
+    item.kind.toLowerCase() === "customresourcedefinition" ||
+    item.title.toLowerCase().startsWith("schema:")
+  );
+}
+
 function cloneFields(fields: FieldDefinition[]): FieldDefinition[] {
   return fields.map((field) => ({ ...field }));
 }
@@ -63,11 +69,9 @@ function mergeManifestHistory(
 
 export default function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [templates, setTemplates] = useState<TemplateDefinition[]>(defaultTemplates);
-  const [activeTemplateId, setActiveTemplateId] = useState(defaultTemplates[3]?.id ?? defaultTemplates[0].id);
-  const [fields, setFields] = useState<FieldDefinition[]>(
-    cloneFields(defaultTemplates[3]?.defaultFields ?? defaultTemplates[0].defaultFields)
-  );
+  const [templates, setTemplates] = useState<TemplateDefinition[]>([]);
+  const [activeTemplateId, setActiveTemplateId] = useState("");
+  const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [manifestHistory, setManifestHistory] = useState<ManifestHistoryItem[]>([]);
 
   const [appStage, setAppStage] = useState<AppStage>("landing");
@@ -114,13 +118,15 @@ export default function App() {
       template
     }));
 
-    const historyOptions = manifestHistory.map((manifest) => ({
+    const historyOptions = manifestHistory
+      .filter((manifest) => !isSchemaManifest(manifest))
+      .map((manifest) => ({
       key: `manifest-${manifest.id}`,
       type: "manifest" as const,
       label: manifest.title,
       subtitle: `${manifest.resource} · saved`,
       manifest
-    }));
+      }));
 
     const combined = [...templateOptions, ...historyOptions];
     const query = searchQuery.trim().toLowerCase();
@@ -157,22 +163,28 @@ export default function App() {
           return;
         }
 
+        setTemplates(apiTemplates);
         if (apiTemplates.length > 0) {
-          setTemplates(apiTemplates);
           const preferred = apiTemplates.find((item) => item.id === activeTemplateId) ?? apiTemplates[0];
           setActiveTemplateId(preferred.id);
           setFields(cloneFields(preferred.defaultFields));
+        } else {
+          setActiveTemplateId("");
+          setFields([]);
         }
-
         setManifestHistory(history);
-        setStatus({ tone: "ok", text: "Backend connected." });
+        setStatus(
+          apiTemplates.length > 0
+            ? { tone: "ok", text: "Backend connected." }
+            : { tone: "warn", text: "Backend connected but no templates found in MongoDB." }
+        );
       } catch {
         if (!active) {
           return;
         }
         setStatus({
           tone: "warn",
-          text: "Backend unavailable. Search/history and CRD submit may be limited."
+          text: "Backend unavailable. Templates cannot be loaded."
         });
       }
     };
@@ -312,6 +324,16 @@ export default function App() {
       setFields(cloneFields(templateMatch.defaultFields));
     } else {
       try {
+        const schemaTemplate = await findTemplateFromSchemaHistory(item.kind);
+        if (schemaTemplate) {
+          setTemplates((previous) => upsertTemplate(previous, schemaTemplate));
+          activateTemplate(schemaTemplate);
+          setSearchOpen(false);
+          setShowHistory(false);
+          setStatus({ tone: "ok", text: `Recovered ${schemaTemplate.kind} builder from saved CRD schema.` });
+          return;
+        }
+
         const parsed = await parseCrd(item.yaml);
         setTemplates((previous) => upsertTemplate(previous, parsed.template));
         activateTemplate(parsed.template);
@@ -330,6 +352,28 @@ export default function App() {
     setSearchOpen(false);
     setShowHistory(false);
     setStatus({ tone: "ok", text: `Loaded history item: ${item.title}.` });
+  }
+
+  async function findTemplateFromSchemaHistory(kind: string): Promise<TemplateDefinition | null> {
+    try {
+      const related = await listManifests(kind);
+      for (const entry of related) {
+        if (!isSchemaManifest(entry)) {
+          continue;
+        }
+        try {
+          const parsed = await parseCrd(entry.yaml);
+          if (parsed.template.kind.toLowerCase() === kind.toLowerCase()) {
+            return parsed.template;
+          }
+        } catch {
+          // Continue scanning candidates.
+        }
+      }
+    } catch {
+      // Ignore and fallback to local manifest parsing.
+    }
+    return null;
   }
 
   function chooseSearchOption(option: SearchOption): void {
@@ -705,6 +749,7 @@ export default function App() {
             </p>
 
             <div className="landing-search-row">
+              <span className="landing-plus-spacer" aria-hidden="true" />
               {renderSearchInput("landing")}
               <button
                 type="button"
@@ -759,10 +804,12 @@ export default function App() {
 
                 {showHistory ? (
                   <div className="history-dropdown">
-                    {manifestHistory.length === 0 ? (
+                    {manifestHistory.filter((item) => !isSchemaManifest(item)).length === 0 ? (
                       <p className="history-empty">No manifests in history yet.</p>
                     ) : (
-                      manifestHistory.map((item) => (
+                      manifestHistory
+                        .filter((item) => !isSchemaManifest(item))
+                        .map((item) => (
                         <button
                           key={item.id}
                           type="button"
@@ -773,7 +820,7 @@ export default function App() {
                           <span>{item.title}</span>
                           <small>{new Date(item.createdAt).toLocaleString()}</small>
                         </button>
-                      ))
+                        ))
                     )}
                   </div>
                 ) : null}

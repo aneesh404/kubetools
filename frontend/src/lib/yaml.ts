@@ -109,7 +109,18 @@ function toYaml(value: unknown, level = 0): string {
 
     return value
       .map((entry) => {
-        if (isObject(entry) || Array.isArray(entry)) {
+        if (isObject(entry)) {
+          const rendered = toYaml(entry, level + 1);
+          const lines = rendered.split("\n");
+          const first = lines[0]?.trimStart() ?? "{}";
+          const rest = lines.slice(1);
+          if (rest.length === 0) {
+            return `${indent}- ${first}`;
+          }
+          return `${indent}- ${first}\n${rest.join("\n")}`;
+        }
+
+        if (Array.isArray(entry)) {
           return `${indent}-\n${toYaml(entry, level + 1)}`;
         }
         return `${indent}- ${formatScalar(entry)}`;

@@ -262,3 +262,50 @@ spec:
 		}
 	}
 }
+
+func TestParseCRD_UsesMapEntryFieldForAdditionalProperties(t *testing.T) {
+	service := NewCRDService()
+	raw := `
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: demo.io
+  names:
+    kind: Demo
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                clusterMetadata:
+                  type: object
+                  properties:
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+`
+
+	result, err := service.ParseCRD(raw)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	paths := map[string]bool{}
+	for _, field := range result.DefaultFields {
+		paths[field.Path] = true
+	}
+
+	if paths["spec.clusterMetadata.annotations"] {
+		t.Fatalf("expected map field to avoid empty object path")
+	}
+	if !paths["spec.clusterMetadata.annotations.exampleKey"] {
+		t.Fatalf("expected map entry seed path for annotations")
+	}
+}
