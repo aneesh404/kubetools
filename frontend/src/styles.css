@@ -253,8 +253,8 @@ body {
 
 .resource-search.landing {
   width: min(820px, 92vw);
-  min-height: 92px;
-  padding: 14px 16px 42px;
+  min-height: 62px;
+  padding: 10px 12px;
   border-radius: 22px;
   border: 1px solid rgba(148, 175, 238, 0.62);
   background: linear-gradient(135deg, rgba(21, 45, 95, 0.9), rgba(36, 70, 133, 0.84));
@@ -301,7 +301,7 @@ body {
 .resource-search.landing input {
   font-size: 1.08rem;
   color: #e7f0ff;
-  padding: 8px 8px 20px 6px;
+  padding: 8px 8px 8px 6px;
 }
 
 .resource-search.landing input::placeholder {
@@ -310,8 +310,8 @@ body {
 
 .resource-search.landing .search-icon {
   color: #c7d9ff;
-  align-self: flex-start;
-  margin-top: 10px;
+  align-self: center;
+  margin-top: 0;
 }
 
 .search-kbd {
@@ -328,37 +328,14 @@ body {
 }
 
 .resource-search.landing .search-kbd {
-  position: absolute;
-  left: 14px;
-  bottom: 10px;
+  position: static;
   margin: 0;
+  margin-right: 10px;
   border: 1px solid rgba(151, 178, 243, 0.5);
   background: rgba(226, 236, 255, 0.15);
   color: #dbe7ff;
   font-size: 0.72rem;
   padding: 6px 10px;
-}
-
-.resource-search.landing .search-aux-action {
-  all: unset;
-  position: absolute;
-  left: 14px;
-  bottom: 10px;
-  border: 1px solid rgba(151, 178, 243, 0.5);
-  background: rgba(226, 236, 255, 0.15);
-  color: #dbe7ff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  border-radius: 999px;
-  line-height: 1;
-  padding: 7px 11px;
-  cursor: pointer;
-}
-
-.resource-search.landing .search-aux-action:hover,
-.resource-search.landing .search-aux-action:focus-visible {
-  border-color: rgba(173, 197, 255, 0.75);
-  background: rgba(233, 241, 255, 0.23);
 }
 
 .resource-search.top .search-kbd {
@@ -370,7 +347,7 @@ body {
   height: 36px;
   padding: 0;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid #bfd1ff;
   background: linear-gradient(135deg, var(--k8s-blue), var(--k8s-blue-strong));
   color: #fff;
@@ -388,9 +365,7 @@ body {
 }
 
 .resource-search.landing .search-submit {
-  position: absolute;
-  right: 14px;
-  bottom: 8px;
+  position: static;
   width: 38px;
   height: 38px;
   border-color: rgba(165, 190, 245, 0.95);

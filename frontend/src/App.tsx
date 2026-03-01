@@ -21,7 +21,7 @@ type AppStage = "landing" | "builder";
 
 type SearchOption = {
   key: string;
-  type: "template" | "manifest";
+  type: "template" | "manifest" | "action";
   label: string;
   subtitle: string;
   template?: TemplateDefinition;
@@ -144,7 +144,7 @@ export default function App() {
       return [];
     }
 
-    return combined
+    const filtered = combined
       .filter((option) => {
         return (
           option.label.toLowerCase().includes(query) || option.subtitle.toLowerCase().includes(query)
@@ -156,6 +156,19 @@ export default function App() {
         return rightStarts - leftStarts;
       })
       .slice(0, 10);
+
+    if (filtered.length > 0) {
+      return filtered;
+    }
+
+    return [
+      {
+        key: "action-add-template",
+        type: "action",
+        label: "+ Add templates or manifests",
+        subtitle: "Import a CRD to create and optionally save a new template."
+      }
+    ];
   }, [manifestHistory, searchQuery, templates]);
 
   useEffect(() => {
@@ -397,6 +410,14 @@ export default function App() {
       void loadHistoryItem(option.manifest);
       setActiveSearchIndex(-1);
       return;
+    }
+
+    if (option.type === "action") {
+      setSearchOpen(false);
+      setActiveSearchIndex(-1);
+      setIsCrdModalOpen(true);
+      setCrdModalError("");
+      setCrdModalInfo("");
     }
   }
 
@@ -711,26 +732,9 @@ export default function App() {
           placeholder="Search manifest type (Deployment, VolumeSnapshot, Widget...)"
           aria-label="Search resource type"
         />
-        {variant === "landing" ? (
-          <button
-            type="button"
-            className="search-kbd search-aux-action"
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
-            onClick={() => {
-              setIsCrdModalOpen(true);
-              setCrdModalError("");
-              setCrdModalInfo("");
-            }}
-          >
-            + Add templates or manifests
-          </button>
-        ) : (
-          <span className="search-kbd" aria-hidden="true">
-            ⌘K
-          </span>
-        )}
+        <span className="search-kbd" aria-hidden="true">
+          ⌘K
+        </span>
         <button
           type="button"
           className="search-submit"
