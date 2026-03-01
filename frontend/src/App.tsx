@@ -8,7 +8,6 @@ import {
   getTemplates,
   listManifests,
   parseCrd,
-  saveManifest,
   submitCrd,
   importCrdFromUrl,
   validateCrd,
@@ -92,6 +91,7 @@ export default function App() {
   const [crdLint, setCrdLint] = useState<ValidateCrdResponse | null>(null);
   const [isLinting, setIsLinting] = useState(false);
   const [isImportingURL, setIsImportingURL] = useState(false);
+  const [isUsingCRD, setIsUsingCRD] = useState(false);
   const [isSubmittingCRD, setIsSubmittingCRD] = useState(false);
   const [crdModalError, setCrdModalError] = useState("");
   const [crdModalInfo, setCrdModalInfo] = useState("");
@@ -411,25 +411,6 @@ export default function App() {
     }
   }
 
-  async function persistManifest(title: string, yaml: string): Promise<void> {
-    if (!activeTemplate) {
-      return;
-    }
-
-    try {
-      const saved = await saveManifest({
-        title,
-        resource: `${activeTemplate.kind} (${activeTemplate.apiVersion})`,
-        apiVersion: activeTemplate.apiVersion,
-        kind: activeTemplate.kind,
-        yaml
-      });
-      setManifestHistory((previous) => mergeManifestHistory(previous, [saved]));
-    } catch {
-      setStatus({ tone: "warn", text: "Saved YAML locally but failed to persist in MongoDB." });
-    }
-  }
-
   function updateField(index: number, value: string): void {
     setFields((previous) =>
       previous.map((field, fieldIndex) =>
@@ -518,12 +499,47 @@ export default function App() {
         fields: effectiveFields
       });
       setYamlOutput(response.yaml);
-      await persistManifest(`Generated ${activeTemplate.kind}`, response.yaml);
-      setStatus({ tone: "ok", text: "YAML generated and saved to MongoDB history." });
+      setStatus({ tone: "ok", text: "YAML generated." });
     } catch {
       setStatus({ tone: "warn", text: "YAML generation failed. Check backend availability." });
     } finally {
       setIsSyncingApi(false);
+    }
+  }
+
+  function closeAndResetCRDModal(): void {
+    setIsCrdModalOpen(false);
+    setCrdTitle("");
+    setCrdRaw("");
+    setCrdUrl("");
+    setCrdLint(null);
+    setCrdModalError("");
+    setCrdModalInfo("");
+  }
+
+  async function useCRDFromModal(): Promise<void> {
+    const raw = crdRaw.trim();
+    if (raw === "") {
+      setCrdModalError("Paste your CRD before using it.");
+      return;
+    }
+
+    if (crdLint && !crdLint.valid) {
+      setCrdModalError("Fix validation errors before using this CRD.");
+      return;
+    }
+
+    setIsUsingCRD(true);
+    try {
+      const response = await parseCrd(raw);
+      setTemplates((previous) => upsertTemplate(previous, response.template));
+      activateTemplate(response.template);
+      setStatus({ tone: "ok", text: `${response.template.kind} loaded for editing (not saved).` });
+      closeAndResetCRDModal();
+    } catch {
+      setCrdModalError("Could not parse CRD. Check schema and try again.");
+    } finally {
+      setIsUsingCRD(false);
     }
   }
 
@@ -553,17 +569,9 @@ export default function App() {
       }
 
       setTemplates((previous) => upsertTemplate(previous, response.template));
-      setManifestHistory((previous) => mergeManifestHistory(previous, [response.manifest]));
       activateTemplate(response.template);
-      setStatus({ tone: "ok", text: `${response.template.kind} submitted and stored in MongoDB.` });
-
-      setIsCrdModalOpen(false);
-      setCrdTitle("");
-      setCrdRaw("");
-      setCrdUrl("");
-      setCrdLint(null);
-      setCrdModalError("");
-      setCrdModalInfo("");
+      setStatus({ tone: "ok", text: `${response.template.kind} saved and loaded from MongoDB.` });
+      closeAndResetCRDModal();
     } catch {
       setCrdModalError("Submission failed. Check backend and MongoDB connectivity.");
     } finally {
@@ -703,9 +711,26 @@ export default function App() {
           placeholder="Search manifest type (Deployment, VolumeSnapshot, Widget...)"
           aria-label="Search resource type"
         />
-        <span className="search-kbd" aria-hidden="true">
-          ⌘K
-        </span>
+        {variant === "landing" ? (
+          <button
+            type="button"
+            className="search-kbd search-aux-action"
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={() => {
+              setIsCrdModalOpen(true);
+              setCrdModalError("");
+              setCrdModalInfo("");
+            }}
+          >
+            + Add templates or manifests
+          </button>
+        ) : (
+          <span className="search-kbd" aria-hidden="true">
+            ⌘K
+          </span>
+        )}
         <button
           type="button"
           className="search-submit"
@@ -758,35 +783,14 @@ export default function App() {
     <div className={`app-shell ${appStage === "landing" ? "is-landing" : "is-builder"}`}>
       {appStage === "landing" ? (
         <main className="landing-page">
-          <div className="landing-silhouette silhouette-a" />
-          <div className="landing-silhouette silhouette-b" />
-          <div className="landing-silhouette silhouette-c" />
-          <div className="landing-orb landing-orb-left" />
-          <div className="landing-orb landing-orb-right" />
-
           <section className="landing-center">
-            <p className="landing-brand">KubeBuilder</p>
-            <h1>Build Custom Resources in Minutes</h1>
+            <h1 className="landing-brand">KubeBuilder</h1>
+
+            <div className="landing-search-row">{renderSearchInput("landing")}</div>
+
             <p className="landing-subtitle">
               Search for a resource type, start building instantly, and ship validated manifests with confidence.
             </p>
-
-            <div className="landing-search-row">
-              <span className="landing-plus-spacer" aria-hidden="true" />
-              {renderSearchInput("landing")}
-              <button
-                type="button"
-                className="plus-launch"
-                onClick={() => {
-                  setIsCrdModalOpen(true);
-                  setCrdModalError("");
-                  setCrdModalInfo("");
-                }}
-                aria-label="Add custom CRD"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
           </section>
         </main>
       ) : (
@@ -1016,12 +1020,26 @@ export default function App() {
               <button
                 type="button"
                 className="primary-btn"
-                disabled={isSubmittingCRD || isLinting || isImportingURL || (crdLint !== null && !crdLint.valid)}
+                disabled={
+                  isUsingCRD || isSubmittingCRD || isLinting || isImportingURL || (crdLint !== null && !crdLint.valid)
+                }
+                onClick={() => {
+                  void useCRDFromModal();
+                }}
+              >
+                {isUsingCRD ? "Using..." : "Use CRD"}
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={
+                  isUsingCRD || isSubmittingCRD || isLinting || isImportingURL || (crdLint !== null && !crdLint.valid)
+                }
                 onClick={() => {
                   void submitCRDFromModal();
                 }}
               >
-                {isSubmittingCRD ? "Submitting..." : "Submit"}
+                {isSubmittingCRD ? "Saving..." : "Save + Use CRD"}
               </button>
             </div>
           </section>

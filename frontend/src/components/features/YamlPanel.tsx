@@ -21,7 +21,7 @@ export function YamlPanel({
         <h3>Generated YAML</h3>
         <div className="actions">
           <button type="button" onClick={onSyncApi} disabled={syncing}>
-            {syncing ? "Generating..." : "Generate & Save"}
+            {syncing ? "Generating..." : "Generate"}
           </button>
           <button type="button" onClick={onCopy}>
             Copy

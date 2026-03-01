@@ -164,25 +164,12 @@ func (h *CRDHandler) SubmitCRD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist CRD schema as companion history item so full template recovery remains possible.
-	_, _ = h.manifests.SaveManifest(r.Context(), models.SaveManifestRequest{
-		Title:      "Schema: " + template.Kind,
-		Resource:   "CRD Schema (" + template.APIVersion + ")",
-		APIVersion: "apiextensions.k8s.io/v1",
-		Kind:       "CustomResourceDefinition",
-		YAML:       payload.Raw,
-	})
-
-	record, err := h.manifests.SaveManifest(r.Context(), models.SaveManifestRequest{
+	record := models.ManifestRecord{
 		Title:      fallbackTitle(payload.Title, template.Kind),
 		Resource:   template.Kind + " (" + template.APIVersion + ")",
 		APIVersion: template.APIVersion,
 		Kind:       template.Kind,
 		YAML:       generatedYAML,
-	})
-	if err != nil {
-		WriteError(w, http.StatusBadRequest, "MANIFEST_SAVE_FAILED", err.Error())
-		return
 	}
 
 	WriteSuccess(w, http.StatusCreated, models.SubmitCRDResponse{
